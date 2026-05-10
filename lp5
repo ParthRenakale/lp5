@@ -1,0 +1,724 @@
+BFS DFS
+========
+
+#include<iostream>
+#include<climits>
+#include<vector>
+#include<omp.h>
+#include<bits/stdc++.h>
+#include<queue>
+#include<stack>
+using namespace std;
+void bfs(int start, vector<vector<int>>&p, vector<bool>&visited){
+    
+    queue<int>q;
+    q.push(start);
+    visited[start]=true;
+    while(q.size()!=0){
+        int d=q.front();
+        #pragma omp parallel for
+        for(int i=0;i<p[d].size();i++){
+            #pragma omp critical
+            {
+                 if(visited[p[d][i]]==false){
+                    visited[p[d][i]]=true;
+                    q.push(p[d][i]);
+                }
+            }
+           
+        }
+        cout<<d<<endl;
+        q.pop();
+    }
+}
+void dfs(int start, vector<vector<int>>&p, vector<bool>&visited){
+    stack<int>s;
+    s.push(start);
+    visited[start]=true;
+    while(s.size()!=0){
+        int d=s.top();
+        s.pop();
+        cout<<d<<" ";
+        #pragma omp parallel for
+        for(int i=p[d].size()-1;i>=0;i--){
+            #pragma omp critical
+            {
+                if(visited[p[d][i]]==false){
+                    visited[p[d][i]]=true;
+                    s.push(p[d][i]);
+                }
+            }
+            
+        }
+    }
+}
+int main(){
+    vector<vector<int>>p(7);
+    p[1]={2,3};
+    p[2]={1,4,5};
+    p[3]={1,6};
+    p[4]={2};
+    p[5]={2};
+    p[6]={3};
+    vector<bool>visited(p.size()+1,false);
+    int start=1;
+    // bfs(start,p,visited);
+    dfs(start,p,visited);
+    return 0;
+}
+
+
+================================================================
+
+Bubble and merge sort
+=====================
+#include<iostream>
+#include<vector>
+#include<omp.h>
+#include<queue>
+#include<stack>
+#include<algorithm>
+using namespace std;
+void bubble(vector<int>&p){
+    for(int i=0;i<p.size();i++){
+        #pragma omp parallel for
+        for(int j=i%2;j<p.size()-1;j+=2){
+            if(p[j]>p[j+1]){
+                swap(p[j],p[j+1]);
+            }
+        }
+    }
+}
+void merge(vector<int>&p,int l, int mid, int h){
+    vector<int>temp;
+    int a=l;
+    int b=mid+1;
+    while(a<=mid && b<=h){
+        if(p[a]<p[b]){
+            temp.push_back(p[a]);
+            a++;
+        }
+        else if(p[b]<=p[a]){
+            temp.push_back(p[b]);
+            b++;
+        }
+    }
+    while(a<=mid){
+        temp.push_back(p[a]);
+        a++;
+    }
+    while(b<=h){
+        temp.push_back(p[b]);
+        b++;
+    }
+    for(int k=0;k<temp.size();k++){
+        p[l+k]=temp[k];
+    }
+}
+void mergesort(vector<int>&p,int l, int h){
+    if(l<h){
+        int mid=(l+h)/2;
+        #pragma omp parallel sections
+        {
+            #pragma omp section
+            {
+                mergesort(p,l,mid);
+            }
+            #pragma omp section
+            {
+                mergesort(p,mid+1,h);
+            }
+        }
+        
+        
+        merge(p,l,mid,h);
+    }
+}
+int main(){
+    vector<int>p={6,1,4,2};
+    // bubble(p);
+    // for(auto i:p){
+    //     cout<<i<<" ";
+    // }
+    int l=0;
+    int h=p.size()-1;
+    cout<<endl;
+    mergesort(p,l,h);
+    for(auto i:p){
+        cout<<i<<" ";
+    }
+    return 0;
+}
+========
+
+operations reduction
+
+
+======
+#include<iostream>
+#include<climits>
+#include<vector>
+#include<omp.h>
+
+using namespace std;
+
+int main(){
+
+    vector<int> p = {3,4,7,9};
+
+    int sum = 0;
+    int mini = INT_MAX;
+    int maxi = INT_MIN;
+
+    int n = p.size();
+
+    #pragma omp parallel for reduction(+:sum) reduction(min:mini) reduction(max:maxi)
+    for(int i=0;i<n;i++){
+
+        if(p[i] < mini){
+            mini = p[i];
+        }
+
+        if(p[i] > maxi){
+            maxi = p[i];
+        }
+
+        sum += p[i];
+    }
+
+    cout << "Sum = " << sum << endl;
+    cout << "Min = " << mini << endl;
+    cout << "Max = " << maxi << endl;
+    cout << "Average = " << (double)sum/n << endl;
+
+    return 0;
+}
+==========================================================
+
+vector addition
+===============
+
+%%writefile vectorAdd.cu
+#include<iostream>
+#include<cuda_runtime.h>
+
+using namespace std;
+
+__global__ void vectorAdd(int *A, int *B, int *C, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if(idx < n)
+    {
+        C[idx] = A[idx] + B[idx];
+    }
+}
+
+int main()
+{
+    int n = 1000000;
+
+    int size = n * sizeof(int);
+
+    int *h_A, *h_B, *h_C;
+
+    h_A = new int[n];
+    h_B = new int[n];
+    h_C = new int[n];
+
+    for(int i=0;i<n;i++)
+    {
+        h_A[i] = i;
+        h_B[i] = i * 2;
+    }
+
+    int *d_A, *d_B, *d_C;
+
+    cudaMalloc((void**)&d_A, size);
+    cudaMalloc((void**)&d_B, size);
+    cudaMalloc((void**)&d_C, size);
+
+    cudaMemcpy(d_A, h_A, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, h_B, size, cudaMemcpyHostToDevice);
+
+    int threadsPerBlock = 256;
+
+    int blocksPerGrid =
+    (n + threadsPerBlock - 1) / threadsPerBlock;
+
+    vectorAdd<<<blocksPerGrid, threadsPerBlock>>>
+    (d_A, d_B, d_C, n);
+
+    cudaMemcpy(h_C, d_C, size, cudaMemcpyDeviceToHost);
+
+    cout << "Result\n";
+
+    for(int i=0;i<10;i++)
+    {
+        cout << h_A[i]
+             << " + "
+             << h_B[i]
+             << " = "
+             << h_C[i]
+             << endl;
+    }
+
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+
+    delete[] h_A;
+    delete[] h_B;
+    delete[] h_C;
+
+    return 0;
+}
+
+
+!nvcc vectorAdd.cu -o vectorAdd
+!./vectorAdd
+
+=======================================================
+vector multiplication
+
+====================
+%%writefile matrixMul.cu
+#include <iostream>
+using namespace std;
+
+__global__ void multiply(int *a, int *b, int *c, int n)
+{
+    int row = threadIdx.x;
+    int col = threadIdx.y;
+
+    if(row < n && col < n)
+    {
+        int sum = 0;
+        for(int k = 0; k < n; k++)
+        {
+            sum += a[row*n + k] * b[k*n + col];
+        }
+        c[row*n + col] = sum;
+    }
+}
+
+int main()
+{
+    int n;
+    cout<<"Enter size: ";
+    cin>>n;
+
+    int size = n*n;
+
+    int *a = new int[size];
+    int *b = new int[size];
+    int *c = new int[size];
+
+    cout<<"Enter matrix A:\n";
+    for(int i=0;i<size;i++) cin>>a[i];
+    cout<<"Enter matrix B:\n";
+    for(int i=0;i<size;i++) cin>>b[i];
+
+    int *d_a, *d_b, *d_c;
+
+    cudaMalloc(&d_a, size*sizeof(int));
+    cudaMalloc(&d_b, size*sizeof(int));
+    cudaMalloc(&d_c, size*sizeof(int));
+
+    cudaMemcpy(d_a,a,size*sizeof(int),cudaMemcpyHostToDevice);
+    cudaMemcpy(d_b,b,size*sizeof(int),cudaMemcpyHostToDevice);
+
+    dim3 threads(n,n);
+    multiply<<<1,threads>>>(d_a,d_b,d_c,n);
+
+    cudaMemcpy(c,d_c,size*sizeof(int),cudaMemcpyDeviceToHost);
+
+    cout<<"Result:\n";
+    for(int i=0;i<n;i++)
+    {
+        for(int j=0;j<n;j++)
+            cout<<c[i*n+j]<<" ";
+        cout<<endl;
+    }
+
+    cudaFree(d_a);
+    cudaFree(d_b);
+    cudaFree(d_c);
+
+    delete[] a;
+    delete[] b;
+    delete[] c;
+
+    return 0;
+} 
+
+!nvcc matrixMul.cu -o matrixMul
+!./matrixMul
+============================================
+
+
+Boston_house regreggion
+========================
+
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+from google.colab import files
+
+# 1. File Upload
+print("Please upload boston_house_prices.csv:")
+uploaded = files.upload()
+filename = list(uploaded.keys())[0]
+df = pd.read_csv(filename)
+
+# 2. Preprocess
+X = df.drop('PRICE', axis=1)
+y = df['PRICE']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+scaler = StandardScaler()
+X_train = scaler.fit_transform(X_train)
+X_test = scaler.transform(X_test)
+
+# 3. Build Model
+model = Sequential([
+    Dense(128, activation='relu', input_shape=(X_train.shape[1],)),
+    Dense(64, activation='relu'),
+    Dense(32, activation='relu'),
+    Dense(1)
+])
+
+model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+model.fit(X_train, y_train, epochs=100, batch_size=32, validation_split=0.2, verbose=1)
+
+# 4. Evaluate
+mse, mae = model.evaluate(X_test, y_test)
+print(f"\nTest Mean Squared Error: {mse:.2f}")
+print(f"Test Mean Absolute Error: {mae:.2f}")
+
+# 5. Visualization
+y_pred = model.predict(X_test)
+
+plt.figure(figsize=(10, 6))
+plt.scatter(y_test, y_pred, alpha=0.5)
+plt.xlabel('Actual Prices')
+plt.ylabel('Predicted Prices')
+plt.title('Actual vs Predicted House Prices')
+plt.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'r--', lw=2)
+plt.show()
+
+
+=====================================================
+IMDB
+
+====
+# ==========================================
+# IMDB Movie Review Sentiment Classification
+# Using Deep Neural Network (DNN)
+# ==========================================
+
+# Install TensorFlow if needed
+# !pip install tensorflow numpy
+
+# ------------------------------------------
+# Import Libraries
+# ------------------------------------------
+
+import tensorflow as tf
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Embedding, Flatten
+import matplotlib.pyplot as plt
+
+# ------------------------------------------
+# Load IMDB Dataset
+# ------------------------------------------
+
+print("Loading IMDB Dataset...")
+
+(X_train, y_train), (X_test, y_test) = imdb.load_data(num_words=10000)
+
+print("Training samples:", len(X_train))
+print("Testing samples:", len(X_test))
+
+# ------------------------------------------
+# Pad Sequences
+# ------------------------------------------
+
+X_train = pad_sequences(X_train, maxlen=200)
+X_test = pad_sequences(X_test, maxlen=200)
+
+print("Shape after padding:", X_train.shape)
+
+# ------------------------------------------
+# Build Deep Neural Network
+# ------------------------------------------
+
+model = Sequential([
+
+    tf.keras.Input(shape=(200,)),
+
+    Embedding(input_dim=10000, output_dim=32),
+
+    Flatten(),
+
+    Dense(64, activation='relu'),
+
+    Dense(1, activation='sigmoid')
+])
+
+# ------------------------------------------
+# Compile Model
+# ------------------------------------------
+
+model.compile(
+    optimizer='adam',
+    loss='binary_crossentropy',
+    metrics=['accuracy']
+)
+
+model.summary()
+
+# ------------------------------------------
+# Train Model
+# ------------------------------------------
+
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=3,
+    batch_size=32,
+    validation_split=0.2,
+    verbose=1
+)
+
+# ------------------------------------------
+# Evaluate Model
+# ------------------------------------------
+
+loss, acc = model.evaluate(X_test, y_test)
+
+print("\nFinal Accuracy:", acc)
+
+# ------------------------------------------
+# Plot Accuracy and Loss
+# ------------------------------------------
+
+plt.figure(figsize=(12,4))
+
+plt.subplot(1,2,1)
+plt.plot(history.history['accuracy'], label='Train Accuracy')
+plt.plot(history.history['val_accuracy'], label='Validation Accuracy')
+plt.title('Accuracy')
+plt.legend()
+
+plt.subplot(1,2,2)
+plt.plot(history.history['loss'], label='Train Loss')
+plt.plot(history.history['val_loss'], label='Validation Loss')
+plt.title('Loss')
+plt.legend()
+
+plt.show()
+
+=====================================================
+Fashion
+========
+# ============================
+# Fashion MNIST CNN Classifier
+# ============================
+
+# Install libraries if needed
+# !pip install pandas numpy tensorflow scikit-learn matplotlib seaborn
+
+# ----------------------------
+# Import Libraries
+# ----------------------------
+
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (
+    Input,
+    Conv2D,
+    MaxPooling2D,
+    Flatten,
+    Dense,
+    Dropout
+)
+
+from google.colab import files
+import matplotlib.pyplot as plt
+
+# ----------------------------
+# Upload CSV Files
+# ----------------------------
+
+print("Upload fashion-mnist_train.csv")
+uploaded_train = files.upload()
+
+print("Upload fashion-mnist_test.csv")
+uploaded_test = files.upload()
+
+# ----------------------------
+# Load Dataset
+# ----------------------------
+
+train_df = pd.read_csv("fashion-mnist_train.csv")
+test_df = pd.read_csv("fashion-mnist_test.csv")
+
+print("Train Shape:", train_df.shape)
+print("Test Shape:", test_df.shape)
+
+# ----------------------------
+# Separate Features and Labels
+# ----------------------------
+
+X_train = train_df.drop('label', axis=1).values
+y_train = train_df['label'].values
+
+X_test = test_df.drop('label', axis=1).values
+y_test = test_df['label'].values
+
+# ----------------------------
+# Reshape Images
+# ----------------------------
+
+X_train = X_train.reshape(-1, 28, 28, 1)
+X_test = X_test.reshape(-1, 28, 28, 1)
+
+# ----------------------------
+# Normalize Pixel Values
+# ----------------------------
+
+X_train = X_train.astype('float32') / 255.0
+X_test = X_test.astype('float32') / 255.0
+
+print("X_train shape:", X_train.shape)
+print("y_train shape:", y_train.shape)
+
+# ----------------------------
+# Build CNN Model
+# ----------------------------
+
+model = Sequential([
+
+    Input(shape=(28,28,1)),
+
+    Conv2D(32, (3,3), activation='relu'),
+    MaxPooling2D((2,2)),
+
+    Conv2D(64, (3,3), activation='relu'),
+    MaxPooling2D((2,2)),
+
+    Flatten(),
+
+    Dense(128, activation='relu'),
+
+    Dropout(0.5),
+
+    Dense(10, activation='softmax')
+])
+
+# ----------------------------
+# Compile Model
+# ----------------------------
+
+model.compile(
+    optimizer='adam',
+    loss='sparse_categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+model.summary()
+
+# ----------------------------
+# Train Model
+# ----------------------------
+
+history = model.fit(
+    X_train,
+    y_train,
+    epochs=10,
+    batch_size=64,
+    validation_split=0.1,
+    verbose=1
+)
+
+# ----------------------------
+# Evaluate Model
+# ----------------------------
+
+loss, accuracy = model.evaluate(X_test, y_test)
+
+print("\nTest Accuracy:", accuracy * 100)
+
+# ----------------------------
+# Plot Accuracy and Loss
+# ----------------------------
+
+plt.figure(figsize=(12,4))
+
+plt.subplot(1,2,1)
+plt.plot(history.history['accuracy'], label='Train')
+plt.plot(history.history['val_accuracy'], label='Validation')
+plt.title('Model Accuracy')
+plt.legend()
+
+plt.subplot(1,2,2)
+plt.plot(history.history['loss'], label='Train')
+plt.plot(history.history['val_loss'], label='Validation')
+plt.title('Model Loss')
+plt.legend()
+
+plt.show()
+
+# ----------------------------
+# Predictions
+# ----------------------------
+
+fashion_labels = [
+    "T-shirt/top",
+    "Trouser",
+    "Pullover",
+    "Dress",
+    "Coat",
+    "Sandal",
+    "Shirt",
+    "Sneaker",
+    "Bag",
+    "Ankle boot"
+]
+
+predictions = model.predict(X_test[:10])
+
+predicted_labels = np.argmax(predictions, axis=1)
+
+# ----------------------------
+# Display Predictions
+# ----------------------------
+
+plt.figure(figsize=(20,4))
+
+for i in range(10):
+
+    plt.subplot(1,10,i+1)
+
+    plt.imshow(X_test[i].reshape(28,28), cmap='gray')
+
+    plt.title(
+        f"P:{fashion_labels[predicted_labels[i]]}\nA:{fashion_labels[y_test[i]]}",
+        fontsize=8
+    )
+
+    plt.axis('off')
+
+plt.show()
